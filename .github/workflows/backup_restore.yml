@@ -1,0 +1,70 @@
+name: Backup and Restore PostgreSQL (CI Test)
+
+on:
+  workflow_dispatch:  # Manually trigger the workflow from GitHub UI
+
+jobs:
+  test_backup_restore:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ${{ secrets.POSTGRES_DB }}"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Wait for PostgreSQL to be ready
+        run: |
+          until PGPASSWORD=${{ secrets.POSTGRES_PASSWORD }} psql -h localhost -U ${{ secrets.POSTGRES_USER }} -d ${{ secrets.POSTGRES_DB }} -c "SELECT 1;" 2>/dev/null; do
+            echo "⏳ Waiting for PostgreSQL to be ready..."
+            sleep 2
+          done
+          echo "✅ PostgreSQL is ready!"
+
+      - name: Run Backup Script
+        env:
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          BACKUP_DIR: backup
+          MODE: backup
+        run: python3 postgres_backup_restore.py
+
+      - name: Verify Backup Files
+        run: |
+          if [ -d "backup" ] && [ "$(ls -A backup)" ]; then
+            echo "✅ Backup files exist:"
+            ls -l backup
+          else
+            echo "❌ Backup files missing!" && exit 1
+          fi
+
+      - name: Run Restore Script
+        env:
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          BACKUP_DIR: backup
+          MODE: restore
+        run: python3 postgres_backup_restore.py
+
+      - name: Verify Restored Data
+        run: |
+          echo "🔍 Checking if tables exist after restore..."
+          PGPASSWORD=${{ secrets.POSTGRES_PASSWORD }} psql -h localhost -U ${{ secrets.POSTGRES_USER }} -d ${{ secrets.POSTGRES_DB }} -c "\dt"
