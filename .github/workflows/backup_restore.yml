@@ -11,13 +11,13 @@ jobs:
       postgres:
         image: postgres:15
         env:
-          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: mysecretpassword
+          POSTGRES_DB: mydb
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres -d ${{ secrets.POSTGRES_DB }}"
+          --health-cmd "pg_isready -U postgres -d mydb"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -31,7 +31,7 @@ jobs:
 
       - name: Wait for PostgreSQL to be ready
         run: |
-          until PGPASSWORD=${{ secrets.POSTGRES_PASSWORD }} psql -h localhost -U ${{ secrets.POSTGRES_USER }} -d ${{ secrets.POSTGRES_DB }} -c "SELECT 1;" 2>/dev/null; do
+          until PGPASSWORD=mysecretpassword psql -h localhost -U postgres -d mydb -c "SELECT 1;" 2>/dev/null; do
             echo "⏳ Waiting for PostgreSQL to be ready..."
             sleep 2
           done
